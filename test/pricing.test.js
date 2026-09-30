@@ -9,12 +9,14 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  GO_PLAN_LIMITS,
   contextTokensOf,
   costOf,
   hasContextTier,
   isEstimated,
   isGoProvider,
   isPeak,
+  quotaFor,
   unitFor
 } from '../lib/pricing.js'
 
@@ -174,4 +176,66 @@ test('costOf applies the tier automatically from the record', () => {
   )
   assert.equal(out(100_000), 6 + (100_000 * 0.5) / 1e6)
   assert.equal(out(300_000), 12 + (300_000 * 1) / 1e6)
+})
+
+// ── plan allowance ────────────────────────────────────────────────────────
+// The $10/$40 subscription price is not the usage allowance: each model has
+// its own monthly dollar budget, and the token prices are identical across
+// plans. These tests pin that reading.
+
+test('quota scales with spend and differs per plan', () => {
+  const go = quotaFor('deepseek-v4.1-flash', 'go', 6)
+  const plus = quotaFor('deepseek-v4.1-flash', 'plus', 6)
+  assert.equal(go.monthly, 60)
+  assert.equal(plus.monthly, 120)
+  assert.equal(go.percent, 10)
+  assert.equal(plus.percent, 5, 'a bigger allowance means a smaller share')
+})
+
+test('the 5-hour and weekly windows are fractions of the monthly allowance', () => {
+  const q = quotaFor('glm-5.3', 'go', 3)
+  assert.equal(q.monthly, 15)
+  assert.equal(q.windows.fiveHour.limit, 3, '20% of 15')
+  assert.equal(q.windows.weekly.limit, 7.5, '50% of 15')
+  assert.equal(q.windows.monthly.percent, 20)
+  assert.equal(q.windows.fiveHour.percent, 100, 'spending the whole 5h allowance')
+})
+
+test('models with no fixed allowance report null rather than 0%', () => {
+  assert.equal(quotaFor('longcat-2.5-preview-free', 'go', 5), null)
+  assert.equal(quotaFor('space-bunny-free', 'plus', 5), null)
+})
+
+test('an unknown model reports null instead of inventing a limit', () => {
+  assert.equal(quotaFor('no-such-model', 'go', 5), null)
+})
+
+test('a zero or negative spend is 0%, not NaN', () => {
+  const q = quotaFor('glm-5.3', 'go', 0)
+  assert.equal(q.percent, 0)
+  assert.equal(quotaFor('glm-5.3', 'go', NaN).percent, 0)
+})
+
+test('the alias resolves before looking up a limit', () => {
+  assert.deepEqual(
+    quotaFor('deepseek-flash', 'go', 6),
+    quotaFor('deepseek-v4.1-flash', 'go', 6)
+  )
+})
+
+test('every limit is a positive number or an explicit null', () => {
+  for (const [model, l] of Object.entries(GO_PLAN_LIMITS)) {
+    for (const plan of ['go', 'plus']) {
+      const v = l[plan]
+      assert.ok(v === null || (Number.isFinite(v) && v > 0),
+        `${model}/${plan} must be a positive number or null, got ${v}`)
+    }
+  }
+})
+
+test('Go Plus never allows less than Go for the same model', () => {
+  for (const [model, l] of Object.entries(GO_PLAN_LIMITS)) {
+    if (l.go === null || l.plus === null) continue
+    assert.ok(l.plus >= l.go, `${model}: Go Plus ${l.plus} < Go ${l.go}`)
+  }
 })

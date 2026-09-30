@@ -83,6 +83,84 @@ function findPriceTable(html) {
   throw new Error('price table not found — the docs page layout probably changed')
 }
 
+/**
+ * Find the two "Model | Input | Output | Cached Read | Cached Write | Monthly
+ * limit" tables. The first is the Go plan, the second Go Plus. Token prices are
+ * identical in both; only the monthly limit differs.
+ */
+function findLimitTables(html) {
+  const found = []
+  for (const t of tables(html)) {
+    const rows = rowsOf(t)
+    if (!rows.length) continue
+    const head = rows[0]
+    if (head[0] === 'Model' && head.includes('Monthly limit')) found.push(rows)
+  }
+  return found
+}
+
+/** "$60" -> 60; "Unlimited (limited time)" -> null. */
+function limitValue(raw) {
+  const s = String(raw || '').trim()
+  if (!s || /unlimited/i.test(s)) return null
+  const m = /\$?([\d.]+)/.exec(s)
+  if (!m) return null
+  const n = Number(m[1])
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** Strip the tier/peak suffixes so both rows fold onto one model id. */
+function limitKey(name) {
+  return String(name || '')
+    .replace(/\s*\((≤|>)\s*[\d.]+K tokens\)/i, '')
+    .replace(/\s*\((Off-Peak|Peak)\)/i, '')
+    .trim()
+}
+
+/**
+ * Extract per-model monthly allowances for both plans.
+ * @returns {Map<string,{go:number|null,plus:number|null}>}
+ */
+export function extractLimits(html) {
+  const t = findLimitTables(html)
+  if (t.length < 2) throw new Error('expected a Go and a Go Plus limit table, found ' + t.length)
+  const ids = findIdMap(html)
+  const out = new Map()
+  // Keep the raw display name alongside the stripped key: the id map lists the
+  // row exactly as written on the page (suffix and all), so the raw name is
+  // what usually matches.
+  const read = (rows) => {
+    const m = new Map()
+    for (const r of rows.slice(1)) {
+      if (r.length < 6 || !r[0]) continue
+      m.set(limitKey(r[0]), { value: limitValue(r[5]), raw: String(r[0]).trim() })
+    }
+    return m
+  }
+  const go = read(t[0])
+  const plus = read(t[1])
+  for (const [key, g] of go) {
+    const id = ids[g.raw] || ids[key] || null
+    if (!id) continue
+    const p = plus.get(key)
+    out.set(id, { go: g.value, plus: p ? p.value : null })
+  }
+  return out
+}
+
+/** Render the GO_PLAN_LIMITS literal body, sorted by model id. */
+export function renderLimits(map) {
+  const entries = [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  const w = Math.max(...entries.map(([k]) => k.length + 3))
+  return entries
+    .map(([k, v]) => {
+      const g = v.go === null ? 'null' : String(v.go)
+      const p = v.plus === null ? 'null' : String(v.plus)
+      return '  ' + (quote(k) + ':').padEnd(w) + '{ go: ' + g.padStart(4) + ', plus: ' + p.padStart(4) + ' }'
+    })
+    .join('\n')
+}
+
 /** Find the "Model | Model ID | Endpoint" table that maps display names to ids. */
 function findIdMap(html) {
   for (const t of tables(html)) {
@@ -330,8 +408,10 @@ async function main() {
   process.stdout.write(`Parsed ${remote.size} priced models from the docs page.\n\n`)
 
   const d = diff(current, remote)
+  const limitDiff = diffLimits(currentLimits(source), extractLimits(html))
 
-  if (!d.added.length && !d.changed.length && !d.removed.length) {
+  if (!d.added.length && !d.changed.length && !d.removed.length &&
+      !limitDiff.added.length && !limitDiff.changed.length && !limitDiff.removed.length) {
     process.stdout.write('✅ Price table is already up to date.\n')
     return
   }
@@ -354,6 +434,18 @@ async function main() {
     process.stdout.write('\n')
   }
 
+  if (limitDiff.added.length || limitDiff.changed.length || limitDiff.removed.length) {
+    process.stdout.write('PLAN ALLOWANCES:\n')
+    for (const [id, v] of limitDiff.added) {
+      process.stdout.write(`  + ${id.padEnd(30)} go=${v.go} plus=${v.plus}\n`)
+    }
+    for (const [id, was, now] of limitDiff.changed) {
+      process.stdout.write(`  ~ ${id}\n      was: go=${was.go} plus=${was.plus}\n      now: go=${now.go} plus=${now.plus}\n`)
+    }
+    for (const [id] of limitDiff.removed) process.stdout.write(`  - ${id} (no longer listed)\n`)
+    process.stdout.write('\n')
+  }
+
   if (!write) {
     process.stdout.write('Dry run. Re-run with --write to apply.\n')
     return
@@ -373,6 +465,10 @@ async function main() {
     .replace(
       /(export const GO_DEEPSEEK = \{)[\s\S]*?(\n\}\n)/,
       (_m, head, tail) => `${head}\n${renderDeepseek(merged)}\n${tail}`
+    )
+    .replace(
+      /(export const GO_PLAN_LIMITS = \{)[\s\S]*?(\n\}\n)/,
+      (_m, head, tail) => `${head}\n${renderLimits(limitDiff.next)}\n${tail}`
     )
 
   await writeFile(PRICING_JS, next)
@@ -407,4 +503,32 @@ if (invokedDirectly) {
     process.stderr.write(`sync-pricing failed: ${err.message}\n`)
     process.exitCode = 1
   })
+}
+
+/** Read the GO_PLAN_LIMITS literal currently in the source. */
+export function currentLimits(source) {
+  const block = /export const GO_PLAN_LIMITS = \{([\s\S]*?)\n\}/.exec(source)
+  const out = new Map()
+  if (!block) return out
+  for (const m of block[1].matchAll(/'([^']+)':\s*\{\s*go:\s*(null|\d+),\s*plus:\s*(null|\d+)\s*\}/g)) {
+    const num = (v) => (v === 'null' ? null : Number(v))
+    out.set(m[1], { go: num(m[2]), plus: num(m[3]) })
+  }
+  return out
+}
+
+/** Compare two limit maps, returning the merged result alongside the diff. */
+export function diffLimits(current, remote) {
+  const added = [], changed = [], removed = []
+  for (const [id, v] of remote) {
+    if (!current.has(id)) { added.push([id, v]); continue }
+    const was = current.get(id)
+    if (was.go !== v.go || was.plus !== v.plus) changed.push([id, was, v])
+  }
+  for (const [id, v] of current) if (!remote.has(id)) removed.push([id, v])
+  // Remote is authoritative, but keep a model that only the source knows about
+  // (e.g. a hand-listed id the docs page renamed) rather than deleting it.
+  const next = new Map(remote)
+  for (const [id, v] of current) if (!next.has(id)) next.set(id, v)
+  return { added, changed, removed, next }
 }

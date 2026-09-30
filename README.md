@@ -94,8 +94,8 @@ assistant message gets a **Token** button.
 ## What it shows
 
 **Usage tab** — total cost (USD), call count, token totals, cache-hit rate, a
-by-model table, and a paged list of calls (25 / 50 / 100 / 250 per page, with
-first/prev/next/last navigation).
+plan-allowance summary (5-hour / weekly / monthly), a by-model table, and a
+paged list of calls (25 / 50 / 100 / 250 per page, with icon pager buttons).
 
 **Per-message popup** — the same numbers scoped to one session, broken down by
 model, with input·miss / cache-hit / output split out.
@@ -109,6 +109,36 @@ cost = (miss × cacheMiss + hit × cacheHit + output × output) / 1e6
 Cache reads are billed at a small fraction of the miss rate, which is why a
 session with 99% cache hits can move hundreds of millions of tokens for a few
 cents.
+
+---
+
+## Plan allowance
+
+The `$10` / `$40` subscription price is **not** the usage allowance. Each model
+has its own monthly dollar budget, and usage counts against that model's budget
+at its own token prices. The docs are explicit that *"token pricing is the same
+for Go and Go Plus"* — only the allowance differs:
+
+| Model | Go | Go Plus |
+|---|---|---|
+| `deepseek-v4.1-flash` | $60 | $120 |
+| `glm-5.3-flash` | $60 | $180 |
+| `glm-5.3` | $15 | $120 |
+| `kimi-k3` | $15 | $60 |
+
+Each allowance is also expressed at three window sizes, which the docs define as
+fractions of the monthly figure:
+
+| Window | Share of monthly | `deepseek-v4.1-flash` on Go |
+|---|---|---|
+| 5 hours | 20% | $12 |
+| Week | 50% | $30 |
+| Month | 100% | $60 |
+
+Because the limits are dollar amounts, the USD figure the panel already computes
+is directly comparable to them — no separate accounting needed. Two models
+(`space-bunny-free`, `longcat-2.5-preview-free`) are listed as unlimited during
+a preview; they report no bar rather than a misleading 0%.
 
 ---
 
@@ -268,7 +298,7 @@ the diff is non-empty.
 npm test
 ```
 
-37 tests, no network access, no dependencies:
+52 tests, no network access, no dependencies:
 
 - **`test/pricing.test.js`** — provider matching, the UTC peak window
   (weekends and exact boundaries), legacy model aliasing, the free/paid switch
