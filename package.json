@@ -1,0 +1,50 @@
+{
+  "name": "dsh-opencode-go-usage",
+  "version": "1.0.0",
+  "description": "Token usage and USD cost tracking for OpenCode Zen Go models in DeepSeek Harness — a DSH Host + Client plugin with a usage panel, per-message token popup and a provider-aware price table.",
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "opencode",
+    "opencode-go",
+    "zen",
+    "usage",
+    "tokens",
+    "cost",
+    "cache"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./pricing": "./lib/pricing.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/pricing.test.js"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fatihtoprakk/dsh-opencode-go-usage.git"
+  }
+}
