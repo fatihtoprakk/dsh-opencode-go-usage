@@ -93,6 +93,14 @@ assistant message gets a **Token** button.
 
 ## What it shows
 
+![The Usage tab: cost and token totals, plan allowance bars for Go and Go Plus, a by-model table, and a paged list of recent calls](docs/usage-tab.png)
+
+> The screenshot uses **simulated data** rendered with the plugin's own styles
+> (`lib/client.js`), so the allowance bars show realistic fullness. Real usage
+> is usually far lower — the bars exist to warn you before you hit a limit, not
+> because they are normally near one.
+
+
 **Usage tab** — total cost (USD), call count, token totals, cache-hit rate, a
 plan-allowance summary (5-hour / weekly / monthly), a by-model table, and a
 paged list of calls (25 / 50 / 100 / 250 per page, with icon pager buttons).
