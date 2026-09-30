@@ -225,13 +225,13 @@ lib/client.js    client: Usage tab + per-message popup
 Records are written atomically (temp file + rename) to:
 
 ```
-~/dsh-kullanim-data/dsh-kullanim/kayitlar.json
+~/dsh-usage-data/dsh-usage/records.json
 ```
 
-Override with `DSH_KULLANIM_DIR`. A corrupt file is moved aside rather than
+Override with `DSH_USAGE_DIR`. A corrupt file is moved aside rather than
 silently overwritten, so history is never destroyed by a bad read.
 
-The HTTP route is `POST /kullanim/api` with these actions:
+The HTTP route is `POST /usage/api` with these actions:
 
 | Action | Body | Returns |
 |---|---|---|
