@@ -113,6 +113,29 @@ cents.
 
 ---
 
+## Provider matching
+
+You name your own provider profile, so a fixed list of ids can never be
+complete — a provider that routes to Zen Go but is called something else would
+have its spend silently dropped from every total.
+
+Providers are therefore recognised in three ways:
+
+| How | Example | Reported? |
+|---|---|---|
+| Listed by id | `opencode-go`, `opencode-optimisthub` | no, it is certain |
+| Name contains `opencode` or `zen` | `zen-1`, `opencode-my-proxy` | yes, as a name match |
+| Chosen by you | anything, via the panel | no, it is your call |
+
+The middle row is a heuristic, so it is never silent: the panel lists every
+provider priced that way, and if one of them does **not** bill at Zen Go rates
+you exclude it with one click. A provider that matches nothing is counted but
+left unpriced, and the warning names it so you are never left guessing which
+one is missing.
+
+Both decisions are remembered in `providers.json` next to your records, so they
+survive a restart and never need editing source.
+
 ## Pricing
 
 ### Zen Go list prices (USD / 1M tokens)
@@ -177,8 +200,9 @@ whenever a stealth model is in play, and reconcile against your real invoice.**
 - **Attribution is per-call, not per-account.** If something else uses the same
   API key, its spend is invisible here.
 - **Unpriced calls are excluded, not guessed.** A model missing from the table
-  contributes `null` and the UI reports how many calls were skipped. The total
-  is therefore a *lower bound* whenever that counter is non-zero.
+  contributes `null` and the UI reports how many calls were skipped, naming the
+  provider and offering a one-click fix. The total is therefore a *lower bound*
+  whenever that counter is non-zero.
 - **Interrupted streams** are recorded as 0-token calls. The provider may still
   bill them; we cannot know the token count, so they are counted but not priced.
 - **This is not an invoice.** It is a local estimate from stream usage data.
@@ -269,7 +293,7 @@ the diff is non-empty.
 npm test
 ```
 
-52 tests, no network access, no dependencies:
+48 tests, no network access, no dependencies:
 
 - **`test/pricing.test.js`** — provider matching, the UTC peak window
   (weekends and exact boundaries), legacy model aliasing, the free/paid switch
@@ -287,7 +311,7 @@ npm test
 
 - Backfill historical usage from DSH session files (`~/.dsh/sessions/**`)
 - Per-day and per-session rollups with a date filter
-- User-editable price table (currently source-edit)
+- User-editable per-model price overrides (providers are already configurable from the panel)
 - A scheduled CI job that opens a PR when `sync-pricing` finds a change
 - Real prices for `omen-alpha` — **if you know them, please open an issue**
 

@@ -13,6 +13,7 @@ import {
   costOf,
   hasContextTier,
   isEstimated,
+  providerPricingSource,
   isGoProvider,
   isPeak,
   unitFor
@@ -202,4 +203,59 @@ test('a provider routed elsewhere is not silently priced', () => {
     provider: 'some-other-provider', model: 'deepseek-v4.1-flash',
     inputTokens: 1000000, cacheReadTokens: 0, outputTokens: 0
   }, Date.UTC(2026, 8, 30, 12)), null)
+})
+
+// ── provider matching ──
+
+test('a provider named after opencode or zen is priced without being listed', () => {
+  // Users name their own profiles, so the list can never be complete. A name
+  // that says where it routes is priced; anything else is left to the user.
+  const matched = ['zen-1', 'my-zen-proxy', 'opencode-anything', 'OpenCode-Upper']
+  for (const id of matched) {
+    assert.equal(providerPricingSource(id), 'pattern', id + ' should match by name')
+    assert.equal(isGoProvider(id), true, id + ' should be priceable')
+  }
+})
+
+test('an unrelated provider name is not priced by guesswork', () => {
+  for (const id of ['anthropic', 'optimisthub-2', 'mystery', '']) {
+    assert.equal(isGoProvider(id), false, id + ' must not be priced')
+  }
+})
+
+test('a listed provider reports the certain source, not the pattern', () => {
+  assert.equal(providerPricingSource('opencode-go'), 'known')
+  assert.equal(providerPricingSource('opencode-optimist-extra'), 'known')
+})
+
+test('an override prices a provider that nothing else would', () => {
+  const ov = { 'optimisthub-2': 'zen-go' }
+  assert.equal(providerPricingSource('optimisthub-2', ov), 'override')
+  assert.equal(isGoProvider('optimisthub-2', ov), true)
+  assert.equal(costOf({
+    provider: 'optimisthub-2', model: 'deepseek-v4.1-flash',
+    inputTokens: 1000000, cacheReadTokens: 0, outputTokens: 0
+  }, Date.UTC(2026, 8, 30, 12), ov), 0.15)
+})
+
+test('an exclusion stops a provider being priced, even a known one', () => {
+  // Regression: isGoProvider once tested only "source !== null", so an
+  // explicit exclusion still produced a cost and the totals never dropped.
+  const ov = { 'opencode-go': 'none' }
+  assert.equal(providerPricingSource('opencode-go', ov), 'excluded')
+  assert.equal(isGoProvider('opencode-go', ov), false)
+  assert.equal(costOf({
+    provider: 'opencode-go', model: 'deepseek-v4.1-flash',
+    inputTokens: 1000000, cacheReadTokens: 0, outputTokens: 0
+  }, Date.UTC(2026, 8, 30, 12), ov), null)
+})
+
+test('an exclusion beats a name that would otherwise match', () => {
+  const ov = { 'zen-custom': 'none' }
+  assert.equal(isGoProvider('zen-custom', ov), false)
+})
+
+test('an override beats the built-in list in both directions', () => {
+  assert.equal(providerPricingSource('opencode-go', { 'opencode-go': 'zen-go' }), 'override')
+  assert.equal(providerPricingSource('opencode-go', { 'opencode-go': 'none' }), 'excluded')
 })
