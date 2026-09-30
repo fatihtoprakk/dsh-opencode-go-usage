@@ -6,6 +6,8 @@ A DSH Host + Client plugin that records every model call, prices it in **USD**
 using the [OpenCode Zen Go](https://opencode.ai/docs/go/) rate card, and shows
 the result in a usage panel plus a per-message token popup.
 
+<sub>Built and maintained by [Scaefy](https://scaefy.com) — digital solutions agency. MIT licensed.</sub>
+
 ---
 
 ## Why this exists
@@ -230,6 +232,29 @@ the exact boundaries), legacy model aliasing, the free/paid switch for
 
 Issues and PRs welcome. If your provider uses different rates, the cleanest
 change is a new entry in `GO_PRICING` plus a test.
+
+---
+
+## Built by Scaefy
+
+This plugin was built and is maintained by **[Scaefy](https://scaefy.com)** — a
+digital solutions agency doing WordPress, Laravel, e-commerce, SEO and
+API / AI integrations.
+
+It started as an internal tool. We run a lot of DSH traffic across Zen Go
+models and needed to know what it actually costs, in USD, without hand-rolling a
+spreadsheet every month. Once it worked, publishing it seemed more useful than
+keeping it private — the pricing problems it solves are not specific to us.
+
+If you need something like this for your own stack — API integrations, AI
+tooling, or an internal panel that talks to your existing systems — that is the
+kind of work we do:
+
+- Website: <https://scaefy.com>
+- Reviews: <https://clutch.co/profile/scaefy>
+
+> The plugin is MIT-licensed and free to use, fork and ship. The agency
+> mention is just credit for the work, not a licence condition.
 
 ---
 

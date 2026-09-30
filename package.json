@@ -46,5 +46,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/fatihtoprakk/dsh-opencode-go-usage.git"
-  }
+  },
+  "author": "Fatih Toprak (Scaefy) <https://scaefy.com>",
+  "homepage": "https://scaefy.com"
 }
