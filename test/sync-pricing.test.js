@@ -10,13 +10,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import {
-  currentLimits,
-  diffLimits,
-  extract,
-  extractLimits,
-  renderLimits
-} from '../scripts/sync-pricing.mjs'
+import { extract } from '../scripts/sync-pricing.mjs'
 
 const row = (...cells) => `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`
 const table = (...rows) => `<table>${rows.join('')}</table>`
@@ -85,72 +79,4 @@ test('recognises the M suffix in a tier threshold', () => {
 test('throws a clear error when the price table is absent', () => {
   assert.throws(() => extract('<html><body><p>no tables here</p></body></html>'),
     /price table not found/)
-})
-
-// ── plan allowances ───────────────────────────────────────────────────────
-
-test('extractLimits reads both plan tables and folds tier rows', () => {
-  const html = `
-    <table><tr><th>Model</th><th>Input</th><th>Output</th><th>Cached Read</th><th>Cached Write</th><th>Monthly limit</th></tr>
-      <tr><td>GLM-5.3-Flash</td><td>$0.15</td><td>$0.50</td><td>$0.03</td><td>-</td><td>$60</td></tr>
-      <tr><td>Grok 4.7 (≤ 200K tokens)</td><td>$2</td><td>$6</td><td>$0.5</td><td>-</td><td>$15</td></tr>
-    </table>
-    <table><tr><th>Model</th><th>Input</th><th>Output</th><th>Cached Read</th><th>Cached Write</th><th>Monthly limit</th></tr>
-      <tr><td>GLM-5.3-Flash</td><td>$0.15</td><td>$0.50</td><td>$0.03</td><td>-</td><td>$180</td></tr>
-      <tr><td>Grok 4.7 (≤ 200K tokens)</td><td>$2</td><td>$6</td><td>$0.5</td><td>-</td><td>$60</td></tr>
-    </table>
-    <table><tr><th>Model</th><th>Model ID</th><th>Endpoint</th><th>AI SDK Package</th></tr>
-      <tr><td>GLM-5.3-Flash</td><td>glm-5.3-flash</td><td>/v1</td><td>openai</td></tr>
-      <tr><td>Grok 4.7 (≤ 200K tokens)</td><td>grok-4.7</td><td>/v1</td><td>openai</td></tr>
-    </table>`
-  const out = extractLimits(html)
-  assert.deepEqual(out.get('glm-5.3-flash'), { go: 60, plus: 180 })
-  assert.deepEqual(out.get('grok-4.7'), { go: 15, plus: 60 })
-})
-
-test('an Unlimited allowance becomes null, not a number', () => {
-  const html = `
-    <table><tr><th>Model</th><th>Input</th><th>Output</th><th>Cached Read</th><th>Cached Write</th><th>Monthly limit</th></tr>
-      <tr><td>Space Bunny Free</td><td>$0</td><td>$0</td><td>$0</td><td>-</td><td>Unlimitedlimited time</td></tr>
-    </table>
-    <table><tr><th>Model</th><th>Input</th><th>Output</th><th>Cached Read</th><th>Cached Write</th><th>Monthly limit</th></tr>
-      <tr><td>Space Bunny Free</td><td>$0</td><td>$0</td><td>$0</td><td>-</td><td>Unlimitedlimited time</td></tr>
-    </table>
-    <table><tr><th>Model</th><th>Model ID</th><th>Endpoint</th><th>AI SDK Package</th></tr>
-      <tr><td>Space Bunny Free</td><td>space-bunny-free</td><td>/v1</td><td>openai</td></tr>
-    </table>`
-  assert.deepEqual(extractLimits(html).get('space-bunny-free'), { go: null, plus: null })
-})
-
-test('extractLimits throws when a plan table is missing', () => {
-  assert.throws(() => extractLimits('<table><tr><th>Model</th></tr></table>'), /limit table/)
-})
-
-test('currentLimits and renderLimits round-trip', () => {
-  const src = `export const GO_PLAN_LIMITS = {
-  'glm-5.3':                     { go:   15, plus:  120 },
-  'space-bunny-free':            { go: null, plus: null }
-}
-`
-  const map = currentLimits(src)
-  assert.deepEqual(map.get('glm-5.3'), { go: 15, plus: 120 })
-  assert.deepEqual(map.get('space-bunny-free'), { go: null, plus: null })
-
-  const rendered = renderLimits(map)
-  const back = currentLimits(`export const GO_PLAN_LIMITS = {\n${rendered}\n}\n`)
-  assert.deepEqual([...back.entries()].sort(), [...map.entries()].sort())
-})
-
-test('diffLimits reports additions, changes and removals', () => {
-  const cur = new Map([['a', { go: 1, plus: 2 }], ['gone', { go: 5, plus: 5 }]])
-  const rem = new Map([['a', { go: 1, plus: 3 }], ['b', { go: 9, plus: 9 }]])
-  const d = diffLimits(cur, rem)
-  assert.equal(d.added.length, 1)
-  assert.equal(d.added[0][0], 'b')
-  assert.equal(d.changed.length, 1)
-  assert.equal(d.changed[0][0], 'a')
-  assert.equal(d.removed.length, 1)
-  assert.equal(d.removed[0][0], 'gone')
-  // A model only the source knows about is kept, not silently dropped.
-  assert.ok(d.next.has('gone'))
 })

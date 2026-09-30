@@ -93,16 +93,9 @@ assistant message gets a **Token** button.
 
 ## What it shows
 
-![The Usage tab: cost and token totals, plan allowance bars for Go and Go Plus, a by-model table, and a paged list of recent calls](docs/usage-tab.png)
-
-> The screenshot uses **simulated data** rendered with the plugin's own styles
-> (`lib/client.js`), so the allowance bars show realistic fullness. Real usage
-> is usually far lower — the bars exist to warn you before you hit a limit, not
-> because they are normally near one.
-
 
 **Usage tab** — total cost (USD), call count, token totals, cache-hit rate, a
-plan-allowance summary (5-hour / weekly / monthly), a by-model table, and a
+a by-model table, and a
 paged list of calls (25 / 50 / 100 / 250 per page, with icon pager buttons).
 
 **Per-message popup** — the same numbers scoped to one session, broken down by
@@ -117,36 +110,6 @@ cost = (miss × cacheMiss + hit × cacheHit + output × output) / 1e6
 Cache reads are billed at a small fraction of the miss rate, which is why a
 session with 99% cache hits can move hundreds of millions of tokens for a few
 cents.
-
----
-
-## Plan allowance
-
-The `$10` / `$40` subscription price is **not** the usage allowance. Each model
-has its own monthly dollar budget, and usage counts against that model's budget
-at its own token prices. The docs are explicit that *"token pricing is the same
-for Go and Go Plus"* — only the allowance differs:
-
-| Model | Go | Go Plus |
-|---|---|---|
-| `deepseek-v4.1-flash` | $60 | $120 |
-| `glm-5.3-flash` | $60 | $180 |
-| `glm-5.3` | $15 | $120 |
-| `kimi-k3` | $15 | $60 |
-
-Each allowance is also expressed at three window sizes, which the docs define as
-fractions of the monthly figure:
-
-| Window | Share of monthly | `deepseek-v4.1-flash` on Go |
-|---|---|---|
-| 5 hours | 20% | $12 |
-| Week | 50% | $30 |
-| Month | 100% | $60 |
-
-Because the limits are dollar amounts, the USD figure the panel already computes
-is directly comparable to them — no separate accounting needed. Two models
-(`space-bunny-free`, `longcat-2.5-preview-free`) are listed as unlimited during
-a preview; they report no bar rather than a misleading 0%.
 
 ---
 
@@ -243,7 +206,7 @@ The HTTP route is `POST /usage/api` with these actions:
 
 | Action | Body | Returns |
 |---|---|---|
-| `list` | `offset`, `limit` (1–500, default 50) | one page of records plus `total`, `hasMore` and the aggregate for **all** records |
+| `list` | `offset`, `limit` (1-500, default 50) | one page of records plus `total`, `hasMore` and the aggregate for **all** records |
 | `summary` | `from`, `to` (epoch ms) | aggregate only |
 | `tokenForMessage` | `sessionId` | totals for one session, broken down by model |
 
