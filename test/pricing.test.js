@@ -9,7 +9,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  contextTokensOf,
   costOf,
+  hasContextTier,
   isEstimated,
   isGoProvider,
   isPeak,
@@ -121,4 +123,55 @@ test('cost is null for unpriced models, never zero-silently', () => {
 test('missing token fields are treated as zero', () => {
   const c = costOf({ provider: 'opencode-go', model: 'mimo-v2.5' }, OFF_PEAK)
   assert.equal(c, 0)
+})
+
+test('context-length tiers switch above the threshold', () => {
+  // Grok is priced at 2x once the prompt exceeds 200K tokens.
+  assert.deepEqual(unitFor('opencode-go', 'grok-4.7', OFF_PEAK, 100_000),
+    { cacheHit: 0.5, cacheMiss: 2, output: 6 })
+  assert.deepEqual(unitFor('opencode-go', 'grok-4.7', OFF_PEAK, 300_000),
+    { cacheHit: 1, cacheMiss: 4, output: 12 })
+})
+
+test('the tier boundary is exclusive: exactly the limit stays cheap', () => {
+  assert.deepEqual(unitFor('opencode-go', 'grok-4.7', OFF_PEAK, 200_000),
+    { cacheHit: 0.5, cacheMiss: 2, output: 6 })
+  assert.deepEqual(unitFor('opencode-go', 'grok-4.7', OFF_PEAK, 200_001),
+    { cacheHit: 1, cacheMiss: 4, output: 12 })
+})
+
+test('a missing context size falls back to the cheaper tier', () => {
+  // Under-reporting beats silently over-charging when we have no measurement.
+  assert.deepEqual(unitFor('opencode-go', 'grok-4.7', OFF_PEAK),
+    { cacheHit: 0.5, cacheMiss: 2, output: 6 })
+})
+
+test('contextTokensOf sums cached and uncached prompt tokens', () => {
+  assert.equal(contextTokensOf({ inputTokens: 100, cacheReadTokens: 500 }), 600)
+  assert.equal(contextTokensOf({ inputTokens: 42 }), 42)
+  assert.equal(contextTokensOf({}), 0)
+})
+
+test('hasContextTier reports which models are tiered', () => {
+  assert.equal(hasContextTier('grok-4.7'), true)
+  assert.equal(hasContextTier('gpt-5.6-luna'), true)
+  assert.equal(hasContextTier('qwen3.7-plus'), true)
+  assert.equal(hasContextTier('mimo-v2.5'), false)
+  assert.equal(hasContextTier('deepseek-v4.1-flash'), false)
+})
+
+test('costOf applies the tier automatically from the record', () => {
+  const base = { provider: 'opencode-go', model: 'grok-4.7', inputTokens: 1000, outputTokens: 100 }
+  const short = costOf({ ...base, cacheReadTokens: 50_000 }, OFF_PEAK)
+  const long = costOf({ ...base, cacheReadTokens: 300_000 }, OFF_PEAK)
+  assert.ok(long > short, 'long-context call must cost more')
+
+  // Compare output cost only: 1M output tokens costs 6 below the threshold
+  // and 12 above it. Tokens are set to zero elsewhere so only the tier shows.
+  const out = (cacheReadTokens) => costOf(
+    { provider: 'opencode-go', model: 'grok-4.7', inputTokens: 0, cacheReadTokens, outputTokens: 1_000_000 },
+    OFF_PEAK
+  )
+  assert.equal(out(100_000), 6 + (100_000 * 0.5) / 1e6)
+  assert.equal(out(300_000), 12 + (300_000 * 1) / 1e6)
 })

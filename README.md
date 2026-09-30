@@ -211,15 +211,57 @@ route is reachable without a session. This plugin restricts its API to loopback
 personal. **If you fork this and expose it on a LAN or VPN address, add your own
 access control.**
 
+### Keeping prices current
+
+List prices change, and a stale table quietly reports wrong money. The table is
+**generated from the live docs page** rather than hand-copied:
+
+```bash
+npm run sync-pricing          # show what changed (dry run)
+npm run sync-pricing:write    # rewrite lib/pricing.js
+npm test                      # then verify
+```
+
+The script fetches <https://opencode.ai/docs/go/>, parses the price table plus
+the display-name → model-id table, and diffs the result against what the plugin
+ships. It reports three things:
+
+- **NEW** — a model we do not price yet
+- **CHANGED** — a price that moved
+- **GONE FROM DOCS** — worth a look, but never deleted automatically
+
+Hand-maintained entries (the stealth models) always win over the page, because
+the page has no price for them by definition.
+
+It caught a real bug on first run: `grok-4.7`, `grok-4.6`, `gpt-6-luna`,
+`gpt-5.6-luna` and `qwen3.7-plus` are **priced by context length** — cheaper up
+to a threshold, up to 2x above it. The original hand-written table had the cheap
+tier only, so long-context calls were under-reported. Both tiers now ship, and
+`costOf()` picks the tier from the record's prompt size.
+
+> Prices are **not** fetched at runtime. The table stays baked into the source:
+> a plugin doing network I/O on startup is slower, breaks offline, and would let
+> a price change silently rewrite the cost of past calls. Run the sync script,
+> review the diff, commit.
+
+A good place to run this on a schedule is CI — a weekly job that opens a PR when
+the diff is non-empty.
+
 ### Tests
 
 ```bash
 npm test
 ```
 
-13 tests cover provider matching, the UTC peak window (including weekends and
-the exact boundaries), legacy model aliasing, the free/paid switch for
-`union-alpha`, `null` for unknown models, and the cost arithmetic.
+25 tests, no network access, no dependencies:
+
+- **`test/pricing.test.js`** — provider matching, the UTC peak window
+  (weekends and exact boundaries), legacy model aliasing, the free/paid switch
+  for `union-alpha`, context-length tiers and their exclusive boundary,
+  `null` for unknown models, and the cost arithmetic.
+- **`test/sync-pricing.test.js`** — the docs-page parser against a fixture
+  covering flat rows, peak/off-peak pairs, context tiers, the `M` suffix and
+  the free-model `-` case.
 
 ---
 
@@ -228,6 +270,7 @@ the exact boundaries), legacy model aliasing, the free/paid switch for
 - Backfill historical usage from DSH session files (`~/.dsh/sessions/**`)
 - Per-day and per-session rollups with a date filter
 - User-editable price table (currently source-edit)
+- A scheduled CI job that opens a PR when `sync-pricing` finds a change
 - Real prices for `omen-alpha` — **if you know them, please open an issue**
 
 Issues and PRs welcome. If your provider uses different rates, the cleanest

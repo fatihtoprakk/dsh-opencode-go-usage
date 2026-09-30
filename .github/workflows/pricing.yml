@@ -1,0 +1,90 @@
+name: Pricing
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'lib/pricing.js'
+      - 'scripts/sync-pricing.mjs'
+      - 'test/**'
+      - '.github/workflows/pricing.yml'
+  pull_request:
+    paths:
+      - 'lib/pricing.js'
+      - 'scripts/sync-pricing.mjs'
+      - 'test/**'
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Tests deliberately avoid the network, so they run on every event.
+      - run: npm test
+
+  sync:
+    name: Check upstream prices
+    runs-on: ubuntu-latest
+    # Only on a schedule or a manual run: needs network access to the docs page.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync price table
+        id: sync
+        run: |
+          # Dry run first so the report can be attached to the PR body.
+          node scripts/sync-pricing.mjs > /tmp/sync-report.txt
+          cat /tmp/sync-report.txt
+
+          if grep -q 'already up to date' /tmp/sync-report.txt; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            node scripts/sync-pricing.mjs --write
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          {
+            echo 'report<<SYNC_EOF'
+            cat /tmp/sync-report.txt
+            echo 'SYNC_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Fail if the synced table breaks the tests
+        if: steps.sync.outputs.changed == 'true'
+        run: npm test
+
+      - name: Open a pull request
+        if: steps.sync.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/sync-pricing
+          delete-branch: true
+          title: 'chore: sync Zen Go prices from upstream'
+          commit-message: 'chore: sync Zen Go prices from upstream'
+          body: |
+            Automated price table refresh from <https://opencode.ai/docs/go/>.
+
+            <details><summary>sync report</summary>
+
+            ```
+            ${{ steps.sync.outputs.report }}
+            ```
+
+            </details>
+
+            Review the diff carefully — especially *GONE FROM DOCS* entries,
+            which are reported but never deleted automatically.
