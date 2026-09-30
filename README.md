@@ -94,7 +94,8 @@ assistant message gets a **Token** button.
 ## What it shows
 
 **Usage tab** — total cost (USD), call count, token totals, cache-hit rate, a
-by-model table, and the most recent calls.
+by-model table, and a paged list of calls (25 / 50 / 100 / 250 per page, with
+first/prev/next/last navigation).
 
 **Per-message popup** — the same numbers scoped to one session, broken down by
 model, with input·miss / cache-hit / output split out.
@@ -200,8 +201,22 @@ Records are written atomically (temp file + rename) to:
 Override with `DSH_KULLANIM_DIR`. A corrupt file is moved aside rather than
 silently overwritten, so history is never destroyed by a bad read.
 
-The HTTP route is `POST /kullanim/api` with actions `list`, `summary` and
-`tokenForMessage`.
+The HTTP route is `POST /kullanim/api` with these actions:
+
+| Action | Body | Returns |
+|---|---|---|
+| `list` | `offset`, `limit` (1–500, default 50) | one page of records plus `total`, `hasMore` and the aggregate for **all** records |
+| `summary` | `from`, `to` (epoch ms) | aggregate only |
+| `tokenForMessage` | `sessionId` | totals for one session, broken down by model |
+
+Paging is done in the host, not the browser. Earlier builds sent up to 2000
+projected records per request; the client only ever rendered 50 of them, so the
+rest was wasted work on both sides. `list` now returns a single page, and the
+projected-and-sorted view is cached until a new record arrives — walking
+through pages in a quiet period does not re-project the whole history.
+
+`aggregate` is always computed over every record, not just the current page, so
+the cost total does not change as you page.
 
 ### Security note
 
@@ -253,12 +268,14 @@ the diff is non-empty.
 npm test
 ```
 
-25 tests, no network access, no dependencies:
+37 tests, no network access, no dependencies:
 
 - **`test/pricing.test.js`** — provider matching, the UTC peak window
   (weekends and exact boundaries), legacy model aliasing, the free/paid switch
   for `union-alpha`, context-length tiers and their exclusive boundary,
   `null` for unknown models, and the cost arithmetic.
+- **`test/ranges.test.js`** — the paging helpers: coercion of untrusted
+  HTTP values, page boundaries, the final short page, and out-of-range offsets.
 - **`test/sync-pricing.test.js`** — the docs-page parser against a fixture
   covering flat rows, peak/off-peak pairs, context tiers, the `M` suffix and
   the free-model `-` case.

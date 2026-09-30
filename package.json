@@ -22,7 +22,8 @@
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./pricing": "./lib/pricing.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./ranges": "./lib/ranges.js"
   },
   "files": [
     "lib",
@@ -34,7 +35,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test/pricing.test.js test/sync-pricing.test.js",
+    "test": "node --test test/pricing.test.js test/ranges.test.js test/sync-pricing.test.js",
     "sync-pricing": "node scripts/sync-pricing.mjs",
     "sync-pricing:write": "node scripts/sync-pricing.mjs --write"
   },
