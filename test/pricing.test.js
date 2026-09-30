@@ -175,3 +175,31 @@ test('costOf applies the tier automatically from the record', () => {
   assert.equal(out(100_000), 6 + (100_000 * 0.5) / 1e6)
   assert.equal(out(300_000), 12 + (300_000 * 1) / 1e6)
 })
+
+test('every Zen Go provider id is priced, including the optimist variants', () => {
+  // A provider routed at the same endpoint must be in GO_PROVIDERS, or its
+  // calls are recorded but never costed and the total silently under-reports.
+  const ids = [
+    'opencode-go',
+    'opencode-go-extra',
+    'opencode-optimisthub',
+    'opencode-optimist-extra',
+    'opencode-optimsithub'
+  ]
+  for (const id of ids) {
+    assert.equal(isGoProvider(id), true, id + ' must be recognised')
+    const c = costOf({
+      provider: id, model: 'deepseek-v4.1-flash',
+      inputTokens: 1000000, cacheReadTokens: 0, outputTokens: 0
+    }, Date.UTC(2026, 8, 30, 12))
+    assert.equal(c, 0.15, id + ' must cost 1M cache-miss tokens at $0.15')
+  }
+})
+
+test('a provider routed elsewhere is not silently priced', () => {
+  assert.equal(isGoProvider('some-other-provider'), false)
+  assert.equal(costOf({
+    provider: 'some-other-provider', model: 'deepseek-v4.1-flash',
+    inputTokens: 1000000, cacheReadTokens: 0, outputTokens: 0
+  }, Date.UTC(2026, 8, 30, 12)), null)
+})
